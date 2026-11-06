@@ -1427,6 +1427,27 @@ describe('DeepSeekAdapter against a mock server', () => {
     })
   })
 
+  it('classifies a flat provider context-window failure body with the canonical code', async () => {
+    const server = await mockServer([{
+      kind: 'http-error',
+      status: 400,
+      body: JSON.stringify({
+        type: 'bad_request_error',
+        message: 'invalid params, context window exceeds limit (2013)',
+        http_code: '400',
+      }),
+    }])
+    const ctx = await harness(server.url)
+    const result = await assemble(ctx, { model: 'deepseek-v4-flash', messages: [] })
+    expect(result.finish).toMatchObject({
+      kind: 'error',
+      failure: {
+        code: CONTEXT_WINDOW_EXCEEDED_CODE,
+        message: 'invalid params, context window exceeds limit (2013)',
+      },
+    })
+  })
+
   it('retains status, Retry-After seconds, and provider request id as structured facts', async () => {
     const server = await mockServer([{
       kind: 'http-error',

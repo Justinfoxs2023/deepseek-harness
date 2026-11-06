@@ -1,0 +1,31 @@
+# Bilingual-pair consistency record for 2026-11-06-wide-character-token-density-and-flat-provider-overflow.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-11-06-wide-character-token-density-and-flat-provider-overflow.md
+/agent-note-wide-character-token-density-and-flat-provider-overflow-bodies:
+  en: 89ac7f3fcdbdde8b
+  zh: 646c5d30f6cfa120
+/agent-note-wide-character-token-density-and-flat-provider-overflow-bodies/problem:
+  en: 5998f4a496494882
+  zh: e0dca364eedb578e
+/agent-note-wide-character-token-density-and-flat-provider-overflow-bodies/decision:
+  en: a15c7c13f167e5ac
+  zh: 63bcc2ef60c2f344
+/agent-note-wide-character-token-density-and-flat-provider-overflow-bodies/decision/wide-characters-cost-one-token-each:
+  en: b291e51c062f6036
+  zh: 313b79a2efd1e4ff
+/agent-note-wide-character-token-density-and-flat-provider-overflow-bodies/decision/provider-error-fields-are-read-from-a-wrapped-or-flat-body:
+  en: 81fd52207c6881c3
+  zh: e3096db28663386e
+/agent-note-wide-character-token-density-and-flat-provider-overflow-bodies/decision/a-recovery-that-cannot-proceed-says-why:
+  en: f4f0add1582f0fb8
+  zh: 980cf417e2accfbd
+/agent-note-wide-character-token-density-and-flat-provider-overflow-bodies/testing:
+  en: 399cf292bac1f32f
+  zh: ce96c751c45512bc
+/agent-note-wide-character-token-density-and-flat-provider-overflow-bodies/alternatives-considered:
+  en: d4728f898869cc64
+  zh: a56443f347f90224
+/agent-note-wide-character-token-density-and-flat-provider-overflow-bodies/consequences:
+  en: ccd6e9ad339519e2
+  zh: c3c59f29b4906620

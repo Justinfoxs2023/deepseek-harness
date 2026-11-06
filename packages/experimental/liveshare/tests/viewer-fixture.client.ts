@@ -1442,14 +1442,34 @@ interface FixtureContextBreakdownProjection {
   messageTokens: number
 }
 
-/** Fixed token-meter heuristic constants mirrored by this client-only fixture. */
-const CHARS_PER_TOKEN = 4
+/** Token-meter heuristic constants mirrored by this client-only fixture. */
+const NON_WIDE_CHARS_PER_TOKEN = 4
+const WIDE_TOKENS_PER_CHAR = 1
 const BLOCK_OVERHEAD = 4
 const ROLE_OVERHEAD = 4
 
-/** Price fixture content with token-meter's fixed-density heuristic. */
+/** Whether one code point belongs to a script whose characters cost one token each. */
+function isWideCharacter(code: number): boolean {
+  return (code >= 0x3040 && code <= 0x30ff)
+    || (code >= 0x3400 && code <= 0x4dbf)
+    || (code >= 0x4e00 && code <= 0x9fff)
+    || (code >= 0xac00 && code <= 0xd7af)
+    || (code >= 0xf900 && code <= 0xfaff)
+    || (code >= 0xff00 && code <= 0xffef)
+}
+
+/** Price fixture text the way the token meter does: wide characters cost one token each. */
+function densityPrice(value: string): number {
+  let wide = 0
+  for (const character of value) {
+    const code = character.codePointAt(0)
+    if (code !== undefined && isWideCharacter(code)) wide += 1
+  }
+  return wide * WIDE_TOKENS_PER_CHAR + Math.ceil((value.length - wide) / NON_WIDE_CHARS_PER_TOKEN)
+}
+
+/** Price fixture content with token-meter's density heuristic. */
 function estimateFixtureContent(blocks: readonly ContentBlock[]): number {
-  const densityPrice = (value: string): number => Math.ceil(value.length / CHARS_PER_TOKEN)
   return blocks.reduce((tokens, block) => {
     if (block.type === 'text' || block.type === 'reasoning') {
       return tokens + densityPrice(block.text) + BLOCK_OVERHEAD
@@ -1482,11 +1502,10 @@ function contextBreakdownOf(log: readonly SessionEvent[]): FixtureContextBreakdo
     const message = deriveEventMessage(event)
     if (message === null) continue
     if (message.role === 'system') {
-      const characters = message.content.reduce(
-        (total, block) => total + (block.type === 'text' ? block.text.length : JSON.stringify(block).length),
+      systemTokens = message.content.reduce(
+        (total, block) => total + (block.type === 'text' ? densityPrice(block.text) : densityPrice(JSON.stringify(block))),
         0,
-      )
-      systemTokens = Math.ceil(characters / CHARS_PER_TOKEN) + ROLE_OVERHEAD
+      ) + ROLE_OVERHEAD
       continue
     }
     messageTokens += estimateFixtureContent(message.content) + ROLE_OVERHEAD
@@ -1495,7 +1514,7 @@ function contextBreakdownOf(log: readonly SessionEvent[]): FixtureContextBreakdo
     systemTokens,
     toolsTokens: header?.tools === undefined || header.tools.length === 0
       ? 0
-      : Math.ceil(JSON.stringify(header.tools).length / CHARS_PER_TOKEN) + BLOCK_OVERHEAD,
+      : densityPrice(JSON.stringify(header.tools)) + BLOCK_OVERHEAD,
     messageTokens,
   }
 }

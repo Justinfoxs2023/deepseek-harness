@@ -2,15 +2,53 @@
 
 import { isContextWindowExceededError, isQuotaExceededError, LlmError, ProviderRequestId } from '@deepseek-ai/dsh-llm'
 
+/** The provider fields a failure body may carry. */
+interface ProviderErrorFields {
+  readonly code?: string
+  readonly type?: string
+  readonly message?: string
+}
+
+/**
+ * Read the provider's error fields from a decoded body.
+ *
+ * OpenAI-compatible providers wrap the fields in an `error` object; other
+ * providers and the gateways in front of them return the same fields flat.
+ * A body whose shape this reader does not know loses the provider's message
+ * and type, and the classification that follows depends on both: a
+ * context-window rejection then reads as a generic bad request, so the
+ * harness never compacts and retries the request it just rejected.
+ * @param raw - decoded HTTP error response or in-band error event.
+ * @returns the error fields the body carries, or undefined when it carries none.
+ */
+export function providerErrorFields(raw: unknown): ProviderErrorFields | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined
+  const record = raw as Record<string, unknown>
+  const wrapped = record['error']
+  const source = typeof wrapped === 'object' && wrapped !== null
+    ? wrapped as Record<string, unknown>
+    : record
+  const code = typeof source['code'] === 'string' ? source['code'] : undefined
+  const type = typeof source['type'] === 'string' ? source['type'] : undefined
+  const message = typeof source['message'] === 'string' ? source['message'] : undefined
+  if (code === undefined && type === undefined && message === undefined) return undefined
+  return {
+    ...code === undefined ? {} : { code },
+    ...type === undefined ? {} : { type },
+    ...message === undefined ? {} : { message },
+  }
+}
+
 /** Read only provider error fields used by bounded Files recovery.
  * @param raw - decoded HTTP error response.
  * @returns code, type, and message text, without unrelated response fields.
  */
 export function providerErrorDetail(raw: unknown): string {
-  const error = typeof raw === 'object' && raw !== null && 'error' in raw ? raw.error : undefined
-  if (typeof error !== 'object' || error === null) return ''
-  const fields = error as Record<string, unknown>
-  return [fields.code, fields.type, fields.message].filter((value): value is string => typeof value === 'string').join(' ')
+  const fields = providerErrorFields(raw)
+  if (fields === undefined) return ''
+  return [fields.code, fields.type, fields.message]
+    .filter((value): value is string => value !== undefined)
+    .join(' ')
 }
 
 /** Classify a provider error without trusting arbitrary response fields.
@@ -20,11 +58,10 @@ export function providerErrorDetail(raw: unknown): string {
  * @returns a stable error consumed by LlmRuntime and llm-retry.
  */
 export function providerError(raw: unknown, status: number | undefined, headers?: Headers): LlmError {
-  const envelope = typeof raw === 'object' && raw !== null ? raw as Record<string, unknown> : {}
-  const error = typeof envelope.error === 'object' && envelope.error !== null ? envelope.error as Record<string, unknown> : {}
-  const message = typeof error.message === 'string' ? error.message : `DeepSeek Messages request failed (${status ?? 'stream error'})`
-  const type = typeof error.type === 'string' ? error.type : ''
-  const detail = `${type} ${typeof error.code === 'string' ? error.code : ''} ${message}`
+  const fields = providerErrorFields(raw)
+  const message = fields?.message ?? `DeepSeek Messages request failed (${status ?? 'stream error'})`
+  const type = fields?.type ?? ''
+  const detail = `${type} ${fields?.code ?? ''} ${message}`
   let code: string
   if (status === 401 || status === 403 || ['authentication_error', 'permission_error'].includes(type)) code = 'AUTH'
   else if (isQuotaExceededError(detail) || status === 402) code = 'QUOTA'

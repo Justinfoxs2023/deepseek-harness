@@ -65,7 +65,7 @@ Both plugins have usable defaults. The meter consumes only the optional `llm` se
 
 ### Reading the numbers
 
-Occupancy is a reference figure, not a billing record: nothing in the harness makes decisions from it, and compaction reads `measure()` instead. A UI computes occupancy by dividing measured pressure by the separately resolved capacity for the selected model. The `contextBreakdown` figures are estimates that will not sum to `projectedTokens`, whose provider anchor carries exactly the heuristic error — CJK text and JSON schemas underprice badly at four characters per token.
+Occupancy is a reference figure, not a billing record: nothing in the harness makes decisions from it, and compaction reads `measure()` instead. A UI computes occupancy by dividing measured pressure by the separately resolved capacity for the selected model. The `contextBreakdown` figures are estimates that will not sum to `projectedTokens`, whose provider anchor carries exactly the heuristic error — JSON schemas still underprice, while wide characters (CJK, kana, Hangul, fullwidth) cost one token each so a CJK transcript no longer reads as a quarter of its provider-reported size.
 
 -----
 
@@ -88,7 +88,7 @@ Provider usage anchors a measurement only when its canonical envelope matches an
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | The `TokenMeter` service: replay state, fold, `measure()` and `estimateMessage()` |
-| [`src/estimate.ts`](src/estimate.ts) | The fixed heuristic: four characters per token plus block and role overhead |
+| [`src/estimate.ts`](src/estimate.ts) | The fixed heuristic: one token per wide character and one token per four other characters, plus block and role overhead |
 | [`src/measurement-projection.ts`](src/measurement-projection.ts) | Fixed-size host recovery facts; no positional caches |
 | [`src/surface-fold.ts`](src/surface-fold.ts) | The positional surface fold shared with `measure()` |
 | [`src/surface-projection.ts`](src/surface-projection.ts) | Shadow-price protocol for the O(1) projection units |
@@ -140,7 +140,7 @@ No direct invalidation; the named consumer owns any request-prefix changes.
 
 These limits define where the measurement stops and future work begins. They are current package constraints, not a general token-accounting comparison or a task backlog.
 
-- **The fixed heuristic is approximate** — text without reusable provider usage is priced by character count plus structural overhead, not an exact provider tokenizer or request serializer; only image occurrences on routes with declared pricing carry provider-exact visual tokens.
+- **The fixed heuristic is approximate** — text without reusable provider usage is priced by character density plus structural overhead, not an exact provider tokenizer or request serializer; only image occurrences on routes with declared pricing carry provider-exact visual tokens.
 - **A cold price cache can scan the complete log** — the fixed-size checkpoint restores measurement facts, not positional prices or the old anchor's messages. Header payloads are rebuilt with the price cache; warm reads need no new history access. Measurement recovery can still read the log prefix. A header reference that does not match the rebuilt journal cache discards that cache and repeats the original calculation from the beginning.
 - **Every measurement clones the current surface** — coherent immutable snapshots make reads O(surface), including below-threshold pressure checks.
 - **Provider usage is only reusable for an identical canonical envelope** — tools, provider, model, or call-config changes deliberately fall back to full heuristic estimation; system-prompt changes are signed surface deltas until the next successful call.
@@ -155,7 +155,7 @@ These limits define where the measurement stops and future work begins. They are
 
 This Dev Note is non-authoritative working context: notes for maintainers and open questions. Shipped behavior and accepted rationale live in the sections above, the package code, and the linked Agent Notes.
 
-- The fixed four-characters-per-token heuristic underprices CJK text and JSON schemas; the provider anchor carries exactly that error when usage is reused. Present the composition rows as an approximate composition, never as a total.
+- The fixed density heuristic prices one wide character at one token and shares one token between four other characters. A CJK transcript therefore prices close to its provider-reported size instead of a quarter of it, while JSON schemas still underprice; the provider anchor carries exactly that error when usage is reused. Present the composition rows as an approximate composition, never as a total.
 - A per-provider exact tokenizer is not decided; keeping one deterministic heuristic is what makes every consumer's measurement agree and replay-stable.
 
 </details>

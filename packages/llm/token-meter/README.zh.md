@@ -65,7 +65,7 @@ token-meter 通过必需的 `ctx.sessionProjections` 服务注册三个客户端
 
 ### 解读数字
 
-占用是参考数字，不是计费记录：harness 中没有任何机制依据它做决定，压缩读取的是 `measure()`。UI 用测量压力除以所选模型独立解析的容量来计算占用。`contextBreakdown` 数字是估算值，其总和不会等于 `projectedTokens`；后者的提供方锚点恰好携带启发式误差——CJK 文本与 JSON schema 在每 token 四字符下严重低估。
+占用是参考数字，不是计费记录：harness 中没有任何机制依据它做决定，压缩读取的是 `measure()`。UI 用测量压力除以所选模型独立解析的容量来计算占用。`contextBreakdown` 数字是估算值，其总和不会等于 `projectedTokens`；后者的提供方锚点恰好携带启发式误差——JSON schema 仍然低估，而宽字符（CJK、假名、谚文、全角）按每字符一个 token 计价，因此 CJK 记录不再只读作提供方实际规模的四分之一。
 
 -----
 
@@ -88,7 +88,7 @@ token-meter 通过必需的 `ctx.sessionProjections` 服务注册三个客户端
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `TokenMeter` 服务：回放状态、fold、`measure()` 与 `estimateMessage()` |
-| [`src/estimate.ts`](src/estimate.ts) | 固定启发式规则：每 token 四字符加块与角色开销 |
+| [`src/estimate.ts`](src/estimate.ts) | 固定启发式规则：宽字符每字符一个 token、其余字符每四字符一个 token，加块与角色开销 |
 | [`src/measurement-projection.ts`](src/measurement-projection.ts) | 固定大小的宿主恢复信息，不含逐节点缓存 |
 | [`src/surface-fold.ts`](src/surface-fold.ts) | 与 `measure()` 共享的位置表面 fold |
 | [`src/surface-projection.ts`](src/surface-projection.ts) | O(1) 投影单元的影价协议 |
@@ -140,7 +140,7 @@ token-meter 通过必需的 `ctx.sessionProjections` 服务注册三个客户端
 
 这些限制说明计量在哪里停止、由未来工作接续。它们是当前包约束，不是通用 token 计量对比或任务积压。
 
-- **固定启发式规则是近似值**——没有可复用提供方用量的文本按字符数加结构开销计价，而非精确提供方分词器或请求序列化器；只有声明了定价的路由上的图片出现处携带提供方精确的视觉 token。
+- **固定启发式规则是近似值**——没有可复用提供方用量的文本按字符密度加结构开销计价，而非精确提供方分词器或请求序列化器；只有声明了定价的路由上的图片出现处携带提供方精确的视觉 token。
 - **价格缓存为空时可扫描完整日志**——固定大小检查点恢复计量信息，不恢复逐节点价格或旧锚点的消息。请求头内容随价格缓存一起重建；热读取不增加日志访问。测量恢复仍可能读取检查点之前的日志。请求头引用与按日志重建的缓存不符时，会丢弃该缓存，从头执行原有计算。
 - **每次测量都克隆当前表面**——连贯不可变快照让读取为 O(surface)，包括低于阈值的压力检查。
 - **提供方用量只在规范 envelope 完全相同时可复用**——工具、提供方、模型或调用配置变化会刻意回退到完整启发式估算；系统提示词变更在下一次成功调用之前按带符号的表面增量计量。
@@ -155,7 +155,7 @@ token-meter 通过必需的 `ctx.sessionProjections` 服务注册三个客户端
 
 本开发备注是不具权威性的工作上下文：维护者备注与开放问题。已交付的行为与既定理由以上文、包代码和相关 Agent Note 为准。
 
-- 固定每 token 四字符启发式规则会低估 CJK 文本与 JSON schema；复用用量时提供方锚点恰好携带该误差，请把构成行呈现为近似构成，绝不呈现为总量。
+- 固定密度启发式规则按宽字符每字符一个 token、其余字符每四字符一个 token 计价。CJK 记录因此接近提供方报告的规模，而不是它的四分之一；JSON schema 仍然低估，复用用量时提供方锚点恰好携带该误差，请把构成行呈现为近似构成，绝不呈现为总量。
 - 按提供方的精确分词器尚未决定；保持单一确定性启发式规则，正是让每个消费方的测量一致且回放稳定的原因。
 
 </details>

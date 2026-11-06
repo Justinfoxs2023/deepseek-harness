@@ -12,7 +12,7 @@ import type { EpochHeader, Session, SessionSeq } from '@deepseek-ai/dsh-session'
 import { CONTEXT_WINDOW_EXCEEDED_CODE, LlmError } from '@deepseek-ai/dsh-llm'
 import type { LlmCallConfig } from '@deepseek-ai/dsh-llm'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
+import type { Agent, PreStepDecision, RequestErrorAction } from '@deepseek-ai/dsh-agent'
 import type { CommandId } from '@deepseek-ai/dsh-commands/brand'
 // Type-only: makes the optional sibling service available to `ctx.get()`.
 import type {} from '@deepseek-ai/dsh-compaction-tool-result-pruner'
@@ -213,14 +213,26 @@ export class BasicCompactionEngine extends CompactionEngine {
     ctx.on('agent/request-error', async (
       { agent, failure, signal },
       next,
-    ) => {
+    ): Promise<RequestErrorAction> => {
       if (failure.code !== CONTEXT_WINDOW_EXCEEDED_CODE || signal.aborted) return next()
       this.overflowAgents.set(agent.session, agent)
       const target = routedTarget(agent.session)
-      if (target === undefined) return next()
+      if (target === undefined) {
+        ctx.logger.warn(
+          'context-overflow recovery needs a routed request target; '
+          + 'preserving the original request error',
+        )
+        return next()
+      }
       const policy = resolveTargetPolicy(this.config, target)
       const retries = this.overflowRetries.get(agent) ?? 0
-      if (retries >= policy.maxOverflowRetries) return next()
+      if (retries >= policy.maxOverflowRetries) {
+        ctx.logger.warn(
+          `context-overflow recovery exhausted its ${String(policy.maxOverflowRetries)} attempt(s); `
+          + 'preserving the original request error',
+        )
+        return next()
+      }
 
       const generation = agent.session.surface.replaceGeneration
       let result: CompactionResult | null
@@ -248,9 +260,15 @@ export class BasicCompactionEngine extends CompactionEngine {
         )
         return next()
       }
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- the signal can abort while compaction is awaited.
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- the signal can abort while recovery is awaited.
       if (signal.aborted
-        || agent.session.surface.replaceGeneration <= generation) return next()
+        || agent.session.surface.replaceGeneration <= generation) {
+        ctx.logger.warn(
+          'context-overflow compaction left the surface unchanged; '
+          + 'preserving the original request error',
+        )
+        return next()
+      }
       if (result !== null) logResult(result, 'context overflow recovery')
       this.overflowRetries.set(agent, retries + 1)
       return { kind: 'retry' }
