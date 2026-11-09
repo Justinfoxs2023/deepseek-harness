@@ -48,6 +48,11 @@ function classifyPiAiError(message: string): string {
   if (/\b413\b|failed to buffer the request body:\s*length limit exceeded|payload too large|request body too large/i.test(message)) return 'INVALID_REQUEST'
   if (/\b400\b|invalid.?request/i.test(message)) return 'INVALID_REQUEST'
   if (/\b5\d\d\b/.test(message)) return 'SERVER'
+  // A provider that answers a 5xx with a body and no status code ("Internal
+  // server error. Please retry your request.") leaves only the wording. It is
+  // a transient provider failure, and the retry whitelist omits PI_AI_ERROR, so
+  // reading it as one ends the turn instead of retrying it.
+  if (/\binternal server error\b|\bserver error\b/i.test(message)) return 'SERVER'
   if (/\btime(?:d)?\s*out\b|timeout/i.test(message)) return 'TIMEOUT'
   // A stream truncated before the provider's terminal event: each pi-ai provider
   // throws its own wording when the wire closes mid-response without a terminal

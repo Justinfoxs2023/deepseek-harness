@@ -910,6 +910,10 @@ describe('mapStopReason / mapUsage', () => {
     }))).toMatchObject({ kind: 'error', failure: { code: 'QUOTA' } })
     expect(mapStopReason(assistant({ stopReason: 'error', errorMessage: 'HTTP 500: backend down' })))
       .toMatchObject({ kind: 'error', failure: { code: 'SERVER' } })
+    expect(mapStopReason(assistant({
+      stopReason: 'error',
+      errorMessage: 'Internal server error. Please retry your request.',
+    }))).toMatchObject({ kind: 'error', failure: { code: 'SERVER' } })
     expect(mapStopReason(assistant({ stopReason: 'error', errorMessage: 'provider timed out' })))
       .toMatchObject({ kind: 'error', failure: { code: 'TIMEOUT' } })
     expect(mapStopReason(assistant({ stopReason: 'error', errorMessage: 'ECONNRESET socket closed' })))
